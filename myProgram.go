@@ -3,9 +3,21 @@ package main
 import (
 	"log"
 	"ethos/syscall"
-	"ethos/kernelTypes"
 	"ethos/altEthos"
+	"strings"
 )
+
+func PrintPrompt() {
+
+	thisDirectory = "."
+
+	me := syscall.GetUser()
+	path = "/user/" + me 
+	prompt := "[" + me + " @ " + path + "]: "
+	
+	log.Printf("%v", prompt)
+
+}
 
 func is_cmd (cmd string)(result bool) {
 
@@ -26,26 +38,34 @@ func is_cmd (cmd string)(result bool) {
 }
 
 var path string
+var thisDirectory string
 
 func main () {
 
-	var myReader kernelTypes.String
-
-	me := syscall.GetUser()
-
-	path = "[" + me + "|" + "~]:"
-
-	statusR := altEthos.ReadStream(syscall.Stdin, &myReader)
-	if statusR != syscall.StatusOk {
-
+	PrintPrompt()
+	var status syscall.Status
+	_, status = altEthos.DirectoryOpen(path)
+	if status != syscall.StatusOk {
+		log.Fatalf("DirectoryOpen: %v\n", status)
 	}
-	statusW := altEthos.WriteStream(syscall.Stdout, &myReader)
-	if statusW != syscall.StatusOk {}
 
-	for {
-		//if is_cmd(cmd) {
-		//execute cmd
-		//}
+	cmd1 := MyCommands {"echo ciao\nls"}
+
+	status = altEthos.Write(path + "/input", &cmd1)
+	if status != syscall.StatusOk {
+		log.Fatalf("Write: %v\n", status)
+	}
+
+	status = altEthos.Read(path + "/input", &cmd1)
+	if status != syscall.StatusOk {
+		log.Fatalf("Read: %v\n", status)
+	}
+	commands := strings.Split(cmd1.Commands, "\n")
+
+	for i, cmd := range commands {
+
+		log.Printf("Command %v: %v\n", i, cmd)
+
 	}
 
 }
