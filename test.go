@@ -6,21 +6,22 @@ import (
 	"ethos/altEthos"
 	"fmt"
 //	"ethos/kernelTypes"
+	"strings"
 )
 
 //Global variables
 var shellName string
 var path string
-var currDirectory string
+var home String
+var currDirectory String
 
 func PrintPrompt() {
 
 	var prompt String
-	currDirectory = "."
 
 	me := syscall.GetUser()
 	path = "/user/" + me
-	prompt = String("[" + me + " @ " + path + "]: ")
+	prompt = String("[" + String(me) + " @ " + currDirectory + "]: ")
 
 	altEthos.WriteStream(syscall.Stdout, &prompt)
 
@@ -32,8 +33,8 @@ func PrintPrompt() {
 //Consider creating a type Command with string field to store the command itself and a flag to indicate if it is a built in command or not
 
 func ParseCommand(line String) (cmd string, args CommandList, nArg uint32){ 
-	
-	args = make(CommandList)	
+
+	args = make(CommandList)
 	//1.0
 	//Process line byte by byte and every time a space is met, populate either cmd or args
 	//Count characters in line and number of tokens
@@ -52,9 +53,6 @@ func ParseCommand(line String) (cmd string, args CommandList, nArg uint32){
 	}
 
 	i = 0
-
-	shellStatus := String("ParseCommand()\n")
-	altEthos.WriteStream(syscall.Stdout, &shellStatus)
 
 	for i<uint32(len(line)) && k<5 && line[i] != '\n' {
 
@@ -98,11 +96,11 @@ func ParseCommand(line String) (cmd string, args CommandList, nArg uint32){
 	}
 
 
-	shellStatus = String("cmd[" + String(cmd) + "]\n")
-	altEthos.WriteStream(syscall.Stdout, &shellStatus)
+	//shellStatus = String("cmd[" + String(cmd) + "]\n")
+	//altEthos.WriteStream(syscall.Stdout, &shellStatus)
 
-	shellStatus = String("ParseCommand: 1:" + args[0] + "2:" + args[1] + ",3:" + args[2] + ",4:" + args[3]+"e")
-	altEthos.WriteStream(syscall.Stdout, &shellStatus)
+	//shellStatus = String("ParseCommand: 1:" + args[0] + "2:" + args[1] + ",3:" + args[2] + ",4:" + args[3]+"e")
+	//altEthos.WriteStream(syscall.Stdout, &shellStatus)
 
 	return
 
@@ -134,14 +132,14 @@ func WrapExec(cmd string, args []String, nArg uint32) (status syscall.Status){
 
 	if nArg == 0 {
 
-		shellStatus := String("Path:" + String(path)+"\n")
-		altEthos.WriteStream(syscall.Stdout, &shellStatus)
+		//shellStatus := String("Path:" + String(path)+"\n")
+		//altEthos.WriteStream(syscall.Stdout, &shellStatus)
 		status = altEthos.Exec(path)
 
 	} else if nArg == 1 {
-	
-		shellStatus := String("Path:"+String(path)+" 1:" + args[0]+"\n")
-		altEthos.WriteStream(syscall.Stdout, &shellStatus)
+
+		//shellStatus := String("Path:"+String(path)+" 1:" + args[0]+"\n")
+		//altEthos.WriteStream(syscall.Stdout, &shellStatus)
 		status = altEthos.Exec(path, &args[0])
 
 	} else if nArg == 2 {
@@ -165,26 +163,51 @@ func WrapExec(cmd string, args []String, nArg uint32) (status syscall.Status){
 func Redirect(cmd string, args []String, nArg uint32)(status syscall.Status) {
 
 
-	shellStatus := String("Folder:" + args[nArg+1] + "\n")
-	altEthos.WriteStream(syscall.Stdout, &shellStatus)
-	
+	//shellStatus := String("Folder:" + args[nArg+1] + "\n")
+	//altEthos.WriteStream(syscall.Stdout, &shellStatus)
 	fd, status := altEthos.DirectoryOpen(string(args[nArg+1]))
-	shellStatus = String("Fd:" + String(fd) + "\n")
-	altEthos.WriteStream(syscall.Stdout, &shellStatus)
+	
 	if status != syscall.StatusOk {
-		shellStatus = String("DirectoryOpen wrong\n")
+
+		shellStatus := String("DirectoryOpen failed\n")
 		altEthos.WriteStream(syscall.Stdout, &shellStatus)
-		
 		return
+
 	}
-	status = altEthos.MoveFd(fd, syscall.Stdout)
+	
+	status = altEthos.Close(syscall.Stdout)
 	if status != syscall.StatusOk {
-		shellStatus = String("MoveFd wrong\n")
-		altEthos.WriteStream(syscall.Stdout, &shellStatus)
+
+		shellStatus := String("Close failed\n")
+		altEthos.WriteStream(fd, &shellStatus)
 		return
+
+	}
+	
+	fdd := fd
+
+	status = altEthos.Close(fd)
+	if status != syscall.StatusOk {
+
+		shellStatus := String("Close failed\n")
+		altEthos.WriteStream(fd, &shellStatus)
+		return
+
 	}
 
-	shellStatus = String("Cmd:" + String(cmd) + "\n")
+	status = altEthos.MoveFd(fdd, 1)
+
+	if status != syscall.StatusOk {
+
+		shellStatus := String("MoveFd failed\n")
+		altEthos.WriteStream(fd, &shellStatus)
+		return
+
+	}
+
+
+
+	shellStatus := String("Cmd:" + String(cmd) + "\n")
 	altEthos.WriteStream(syscall.Stdout, &shellStatus)
 
 	shellStatus = String("Argument:"+args[0]+")\n")
@@ -202,8 +225,12 @@ func Redirect(cmd string, args []String, nArg uint32)(status syscall.Status) {
 
 func IsCmd(cmd string)(b bool) {
 	
-	switch(cmd) {
+	//shellStatus := String("cmd [" + String(cmd) + "]")
+	//altEthos.WriteStream(syscall.Stdout, &shellStatus)
 
+	switch(cmd) {
+	case "cd":
+		b = true
 	case "echo":
 		b = true
 	case "ps":
@@ -214,8 +241,53 @@ func IsCmd(cmd string)(b bool) {
 		b = false
 
 	}
-	
+
 	return
+}
+
+func HandleCd(firstArg String){
+
+	folder := firstArg
+
+	if firstArg == "" {
+
+		folder = "/"
+
+	} 
+
+	status := altEthos.Chdir(string(folder))
+
+	if status != syscall.StatusOk {
+
+		shellStatus := String("cd: not a directory\n")
+		altEthos.WriteStream(syscall.Stdout, &shellStatus)
+
+	} else {
+
+		if firstArg == "" {
+
+			currDirectory = home
+
+		} else if firstArg == ".." {
+
+			var temps []string
+			var i uint32
+
+			temps = strings.Split(string(currDirectory), "/")
+			currDirectory = ""
+
+			for i=0; i<uint32(len(temps)-2); i++ {
+				currDirectory = String(currDirectory + String(temps[i]) + "/")
+			}
+
+		} else {
+
+			currDirectory = String(currDirectory + firstArg + "/")
+
+		}
+
+	}
+
 }
 
 func main (){
@@ -227,6 +299,8 @@ func main (){
 	//var logger = log.Initialize("test/log/")
 
 	shellName = "pizza"
+	home = "home/"
+	currDirectory = home
 	var shellStatus String
 	//t = "----------------------------\n\n"
 	//altEthos.WriteStream(syscall.Stdout, &t)
@@ -235,10 +309,11 @@ func main (){
 
 
 	PrintPrompt()
+
 	status := altEthos.ReadStream(syscall.Stdin, &cmd_line)
 	if status != syscall.StatusOk {
 
-		shellStatus = String("Read error [" + String(status) + "]")
+		shellStatus = String("Read failed\n")
 		altEthos.WriteStream(syscall.Stdout, &shellStatus)
 
 	}
@@ -250,8 +325,8 @@ func main (){
 		//shellStatus = String("1\n")
 		//altEthos.WriteStream(syscall.Stdout, &shellStatus)
 
-		shellStatus = String("cmd_line[" + String(cmd_line) + "]\n")
-		altEthos.WriteStream(syscall.Stdout, &shellStatus)
+		//shellStatus = String("cmd_line[" + String(cmd_line) + "]\n")
+		//altEthos.WriteStream(syscall.Stdout, &shellStatus)
 
 		cmd, args, nArg := ParseCommand(cmd_line)
 
@@ -268,11 +343,20 @@ func main (){
 			//	logger.Printf("%s ", args[i])
 			//}
 
+			var argArr []String
+			argArr = GetArgsArray(args)
+
+			if cmd == "cd" {
+
+				HandleCd(argArr[0])
+
+			}
+
 			pid = altEthos.GetPid()
 			_, status = altEthos.Fork(0)
 			if status != syscall.StatusOk {
 
-				shellStatus = String("Fork error [" + String(status) + "]")
+				shellStatus = String("Fork failed\n")
 				altEthos.WriteStream(syscall.Stdout, &shellStatus)
 
 			}
@@ -281,42 +365,43 @@ func main (){
 
 			//Parent process
 			if newPid == pid {
-				//shellStatus = String("Father\n")
-				//altEthos.WriteStream(syscall.Stdout, &shellStatus)
+
+
 				time := altEthos.GetTime()
-				_ = altEthos.Beep(time+3)
-				//fmt.Fprint(io.Stdout, "Ehi")
+				_ = altEthos.Beep(time+6*100000000)
+
 
 			} else {
 			//Child process
+				if cmd != "cd" {
 
+					if argArr[nArg] == ">" || argArr[nArg] == "<" {
 
-				var argArr []String
-				argArr = GetArgsArray(args)
+						//shellStatus := String("****" + argArr[nArg] + "\n")
+						//altEthos.WriteStream(syscall.Stdout, &shellStatus)
 
-				if argArr[nArg] == ">" || argArr[nArg] == "<" {
+						_ = Redirect(cmd, argArr, nArg)
 
+					} else {
 
-					shellStatus := String("****" + argArr[nArg] + "\n")
-					altEthos.WriteStream(syscall.Stdout, &shellStatus)
+						//shellStatus = String("1:" + argArr[0] + "2:" + argArr[1] + ",3:" + argArr[2] + ",4:" + argArr[3]+"e")
+						//altEthos.WriteStream(syscall.Stdout, &shellStatus)
 
-					_ = Redirect(cmd, argArr, nArg)
+						status := WrapExec(cmd, argArr, nArg)
+						//status := altEthos.Exec(path, &argArr[0], &argArr[1], &argArr[2], &argArr[3])
+						if status != syscall.StatusOk {
 
-				} else {
+							shellStatus = String("[" + shellName + "] Command not found: " + cmd + "\n")
+							altEthos.WriteStream(syscall.Stdout, &shellStatus)
 
-					//shellStatus = String("1:" + argArr[0] + "2:" + argArr[1] + ",3:" + argArr[2] + ",4:" + argArr[3]+"e")
-					//altEthos.WriteStream(syscall.Stdout, &shellStatus)
-
-					status := WrapExec(cmd, argArr, nArg)
-					//status := altEthos.Exec(path, &argArr[0], &argArr[1], &argArr[2], &argArr[3])
-					if status != syscall.StatusOk {
-
-						shellStatus = String("[" + shellName + "] Command not found: " + cmd + "\n")
-						altEthos.WriteStream(syscall.Stdout, &shellStatus)
+						}
 
 					}
+
 				}
+
 				altEthos.Exit(syscall.StatusOk)
+
 			}
 
 		} else {
@@ -331,7 +416,7 @@ func main (){
 		status := altEthos.ReadStream(syscall.Stdin, &cmd_line)
 		if status != syscall.StatusOk {
 
-			shellStatus = String("Read error [" + String(status) + "]")
+			shellStatus = String("Read failed")
 			altEthos.WriteStream(syscall.Stdout, &shellStatus)
 
 		}
