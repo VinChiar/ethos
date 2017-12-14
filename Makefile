@@ -15,7 +15,7 @@ export MINIMALTDROOT=server/minimaltdfs
 
 .PHONY: all install
 
-program = test
+program = etShell
 new_type = commandTypes
 New_type = CommandList
 new_type_index = index
